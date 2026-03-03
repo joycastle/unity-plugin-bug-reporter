@@ -1,0 +1,11 @@
+{
+  "name": "com.joycastle.bugreporter",
+  "version": "0.1.0",
+  "displayName": "Bug Reporter SDK",
+  "description": "通用游戏内 Bug 反馈采集与上报 SDK",
+  "unity": "2021.3",
+  "author": {
+    "name": "JoyCastle"
+  },
+  "keywords": ["bug", "reporter", "feedback", "QA"]
+}

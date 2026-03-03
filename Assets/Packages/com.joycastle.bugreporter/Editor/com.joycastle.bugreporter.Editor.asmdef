@@ -1,0 +1,9 @@
+{
+  "name": "com.joycastle.bugreporter.Editor",
+  "rootNamespace": "JoyCastle.BugReporter.Editor",
+  "references": ["com.joycastle.bugreporter"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false
+}

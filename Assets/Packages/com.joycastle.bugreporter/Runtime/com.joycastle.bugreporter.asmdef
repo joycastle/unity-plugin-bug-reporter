@@ -1,0 +1,9 @@
+{
+  "name": "com.joycastle.bugreporter",
+  "rootNamespace": "JoyCastle.BugReporter",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false
+}
