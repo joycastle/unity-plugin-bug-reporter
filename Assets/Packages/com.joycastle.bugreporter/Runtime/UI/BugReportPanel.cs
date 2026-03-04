@@ -26,10 +26,13 @@ namespace JoyCastle.BugReporter {
         // UI 引用
         private Button _collectBtn;
         private Button _getBtn;
+        private Button _selectVideoBtn;
+        private Text _videoKeyText;
         private Transform _contentParent;
         private GameObject _infoItemTemplate;
         private GameObject _issueTitleItem;
         private InputField _issueTitleInput;
+        private GameObject _videoItem;
         private RawImage _screenshotRawImage;
 
         // 采集缓存（打开时采集一次，上报时直接用）
@@ -71,10 +74,13 @@ namespace JoyCastle.BugReporter {
                 _panelInstance = null;
                 _collectBtn = null;
                 _getBtn = null;
+                _selectVideoBtn = null;
+                _videoKeyText = null;
                 _contentParent = null;
                 _infoItemTemplate = null;
                 _issueTitleItem = null;
                 _issueTitleInput = null;
+                _videoItem = null;
                 _screenshotRawImage = null;
                 _cachedFields = null;
                 _cachedFiles = null;
@@ -101,6 +107,18 @@ namespace JoyCastle.BugReporter {
                 if (issueTitleTr != null) {
                     _issueTitleItem = issueTitleTr.gameObject;
                     _issueTitleInput = issueTitleTr.Find("InputField")?.GetComponent<InputField>();
+                }
+
+                // 视频选择项
+                var videoTr = contentTr.Find("InputVideo_BugVideo");
+                if (videoTr != null) {
+                    _videoItem = videoTr.gameObject;
+                    _videoKeyText = videoTr.Find("key")?.GetComponent<Text>();
+                    var selectBtnTr = videoTr.Find("SelectVideoBtn");
+                    if (selectBtnTr != null) {
+                        _selectVideoBtn = selectBtnTr.GetComponent<Button>();
+                        _selectVideoBtn?.onClick.AddListener(OnSelectVideoClicked);
+                    }
                 }
 
                 // InfoItem 模板
@@ -136,6 +154,8 @@ namespace JoyCastle.BugReporter {
                 if (!collector.IsEnabled) continue;
                 // 截图采集器跳过（由 GetBtn 手动触发）
                 if (collector is ScreenshotCollector) continue;
+                // 视频采集器跳过（由 SelectVideoBtn 手动触发）
+                if (collector is VideoCollector) continue;
                 try {
                     var result = collector.Collect();
                     if (result.Fields != null) {
@@ -192,6 +212,26 @@ namespace JoyCastle.BugReporter {
             }
         }
 
+        // ── SelectVideoBtn: 选择视频 ──
+
+        private void OnSelectVideoClicked() {
+            var videoCollector = BugReporterSDK.GetVideoCollector();
+            if (videoCollector == null) {
+                Debug.LogWarning("[BugReporter] VideoCollector not enabled.");
+                return;
+            }
+
+            _selectVideoBtn.interactable = false;
+            videoCollector.PickVideo((success, msg) => {
+                if (_videoKeyText != null) {
+                    _videoKeyText.text = success ? msg : "录屏视频（未选择）";
+                }
+                if (_selectVideoBtn != null) {
+                    _selectVideoBtn.interactable = true;
+                }
+            });
+        }
+
         // ── CollectBtn: 上报 ──
 
         private void OnSubmitClicked() {
@@ -215,6 +255,24 @@ namespace JoyCastle.BugReporter {
                 report.Fields["issueTitle"] = issueTitle;
             }
 
+            // 合并视频采集器的数据
+            var videoCollector = BugReporterSDK.GetVideoCollector();
+            if (videoCollector is { HasVideo: true }) {
+                try {
+                    var videoResult = videoCollector.Collect();
+                    if (videoResult.Fields != null) {
+                        foreach (var kv in videoResult.Fields)
+                            report.Fields[kv.Key] = kv.Value;
+                    }
+                    if (videoResult.Files != null) {
+                        foreach (var kv in videoResult.Files)
+                            report.Files[kv.Key] = kv.Value;
+                    }
+                } catch (Exception e) {
+                    Debug.LogWarning($"[BugReporter] VideoCollector failed: {e.Message}");
+                }
+            }
+
             yield return BugReporterSDK.GetUploader().Upload(report, (success, msg) => {
                 Debug.Log(success
                     ? "[BugReporter] Report submitted."
@@ -231,10 +289,10 @@ namespace JoyCastle.BugReporter {
         private void PopulateInfoList(Dictionary<string, string> fields) {
             if (_contentParent == null || _infoItemTemplate == null) return;
 
-            // 清除之前生成的 item（保留模板和 IssueTitle）
+            // 清除之前生成的 item（保留模板、IssueTitle、VideoItem）
             for (var i = _contentParent.childCount - 1; i >= 0; i--) {
                 var child = _contentParent.GetChild(i).gameObject;
-                if (child != _infoItemTemplate && child != _issueTitleItem) {
+                if (child != _infoItemTemplate && child != _issueTitleItem && child != _videoItem) {
                     Destroy(child);
                 }
             }
