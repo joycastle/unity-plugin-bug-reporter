@@ -28,6 +28,8 @@ namespace JoyCastle.BugReporter {
         private Button _getBtn;
         private Transform _contentParent;
         private GameObject _infoItemTemplate;
+        private GameObject _issueTitleItem;
+        private InputField _issueTitleInput;
         private RawImage _screenshotRawImage;
 
         // 采集缓存（打开时采集一次，上报时直接用）
@@ -71,6 +73,8 @@ namespace JoyCastle.BugReporter {
                 _getBtn = null;
                 _contentParent = null;
                 _infoItemTemplate = null;
+                _issueTitleItem = null;
+                _issueTitleInput = null;
                 _screenshotRawImage = null;
                 _cachedFields = null;
                 _cachedFiles = null;
@@ -87,10 +91,19 @@ namespace JoyCastle.BugReporter {
                 _collectBtn?.onClick.AddListener(OnSubmitClicked);
             }
 
-            // InfoItem 模板（在 Content 下）
+            // InfoItem 模板 和 InputItem_IssueTitle（在 Content 下）
             var contentTr = root.Find("Panel/CollectInfoPanel/Scroll View/Viewport/Content");
             if (contentTr != null) {
                 _contentParent = contentTr;
+
+                // IssueTitle 输入项
+                var issueTitleTr = contentTr.Find("InputItem_IssueTitle");
+                if (issueTitleTr != null) {
+                    _issueTitleItem = issueTitleTr.gameObject;
+                    _issueTitleInput = issueTitleTr.Find("InputField")?.GetComponent<InputField>();
+                }
+
+                // InfoItem 模板
                 var itemTr = contentTr.Find("InfoItem");
                 if (itemTr != null) {
                     _infoItemTemplate = itemTr.gameObject;
@@ -187,12 +200,20 @@ namespace JoyCastle.BugReporter {
         }
 
         private IEnumerator DoSubmit() {
+            // 读取用户输入的标题
+            var issueTitle = _issueTitleInput != null ? _issueTitleInput.text : "";
+
             var report = new BugReport {
                 AppId = BugReporterSDK.GetConfig().appId,
-                Description = "",
+                Description = issueTitle,
                 Fields = _cachedFields ?? new Dictionary<string, string>(),
                 Files = _cachedFiles ?? new Dictionary<string, byte[]>(),
             };
+
+            // 标题也作为字段上报
+            if (!string.IsNullOrEmpty(issueTitle)) {
+                report.Fields["issueTitle"] = issueTitle;
+            }
 
             yield return BugReporterSDK.GetUploader().Upload(report, (success, msg) => {
                 Debug.Log(success
@@ -210,10 +231,10 @@ namespace JoyCastle.BugReporter {
         private void PopulateInfoList(Dictionary<string, string> fields) {
             if (_contentParent == null || _infoItemTemplate == null) return;
 
-            // 清除之前生成的 item（保留模板）
+            // 清除之前生成的 item（保留模板和 IssueTitle）
             for (var i = _contentParent.childCount - 1; i >= 0; i--) {
                 var child = _contentParent.GetChild(i).gameObject;
-                if (child != _infoItemTemplate) {
+                if (child != _infoItemTemplate && child != _issueTitleItem) {
                     Destroy(child);
                 }
             }
@@ -245,22 +266,7 @@ namespace JoyCastle.BugReporter {
                     Destroy(oldTex);
                 }
                 _screenshotRawImage.texture = tex;
-                _screenshotRawImage.SetNativeSize();
-                FitRawImageToParent(_screenshotRawImage);
             }
-        }
-
-        private static void FitRawImageToParent(RawImage rawImage) {
-            var rt = rawImage.GetComponent<RectTransform>();
-            var parentRt = rt.parent as RectTransform;
-            if (parentRt == null || rawImage.texture == null) return;
-
-            var parentSize = parentRt.rect.size;
-            var texW = (float)rawImage.texture.width;
-            var texH = (float)rawImage.texture.height;
-            var scale = Mathf.Min(parentSize.x / texW, parentSize.y / texH);
-
-            rt.sizeDelta = new Vector2(texW * scale, texH * scale);
         }
     }
 }
