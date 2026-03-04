@@ -80,6 +80,27 @@ namespace JoyCastle.BugReporter {
                 }
             }
 
+            // ── 打印上报详情 ──
+            var sb = new StringBuilder();
+            sb.AppendLine("[BugReporter] ===== Upload Details =====");
+            sb.AppendLine($"  URL: {_serverUrl}");
+            sb.AppendLine($"  Token: {(string.IsNullOrEmpty(_webhookToken) ? "(none)" : _webhookToken.Substring(0, 8) + "...")}");
+            foreach (var section in form) {
+                var name = section.sectionName;
+                var data = section.sectionData;
+                var file = section.fileName;
+                if (!string.IsNullOrEmpty(file)) {
+                    var sizeMB = data != null ? data.Length / (1024f * 1024f) : 0;
+                    sb.AppendLine($"  [File] {name}={file} ({sizeMB:F2}MB)");
+                } else {
+                    var value = data != null ? Encoding.UTF8.GetString(data) : "";
+                    if (value.Length > 100) value = value.Substring(0, 100) + "...";
+                    sb.AppendLine($"  [Field] {name}={value}");
+                }
+            }
+            sb.AppendLine("[BugReporter] ========================");
+            Debug.Log(sb.ToString());
+
             // ── 发送请求 ──
             using var request = UnityWebRequest.Post(_serverUrl, form);
             request.timeout = _timeout;
