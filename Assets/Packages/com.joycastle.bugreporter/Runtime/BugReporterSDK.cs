@@ -55,6 +55,26 @@ namespace JoyCastle.BugReporter {
             _instance.StartCoroutine(_instance.DoSubmit(description));
         }
 
+        public static IReadOnlyList<IInfoCollector> GetCollectors() {
+            EnsureInitialized();
+            return s_collectors;
+        }
+
+        public static ScreenshotCollector GetScreenshotCollector() {
+            EnsureInitialized();
+            return _instance._screenshotCollector;
+        }
+
+        public static BugReporterConfig GetConfig() {
+            EnsureInitialized();
+            return _config;
+        }
+
+        public static ReportUploader GetUploader() {
+            EnsureInitialized();
+            return _instance._uploader;
+        }
+
         // ── 内部逻辑 ──
 
         private void Setup() {
