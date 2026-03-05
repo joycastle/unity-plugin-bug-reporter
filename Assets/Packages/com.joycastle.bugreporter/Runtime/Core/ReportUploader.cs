@@ -46,6 +46,10 @@ namespace JoyCastle.BugReporter {
             };
             foreach (var kv in fields) {
                 if (!mappedKeys.Contains(kv.Key)) {
+                    // 过滤一些不需要的log
+                    if (kv.Key.Equals("runtimeLog")) {
+                        continue;
+                    }
                     dataMap[kv.Key] = kv.Value ?? "";
                 }
             }

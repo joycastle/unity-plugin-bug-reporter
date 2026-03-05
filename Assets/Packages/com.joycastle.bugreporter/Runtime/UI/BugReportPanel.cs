@@ -38,6 +38,14 @@ namespace JoyCastle.BugReporter {
         private GameObject _foldItem;
         private RawImage _screenshotRawImage;
 
+        // Dropdown 引用
+        private Dropdown _priorityDropdown;
+        private Dropdown _significanceDropdown;
+        private Dropdown _discoveryStageDropdown;
+        private GameObject _priorityItem;
+        private GameObject _significanceItem;
+        private GameObject _discoveryStageItem;
+
         // 采集信息展开/收起状态
         private bool _infoExpanded;
         private readonly List<GameObject> _infoItems = new();
@@ -92,6 +100,12 @@ namespace JoyCastle.BugReporter {
                 _videoItem = null;
                 _foldItem = null;
                 _screenshotRawImage = null;
+                _priorityDropdown = null;
+                _significanceDropdown = null;
+                _discoveryStageDropdown = null;
+                _priorityItem = null;
+                _significanceItem = null;
+                _discoveryStageItem = null;
                 _infoExpanded = false;
                 _infoItems.Clear();
                 _cachedFields = null;
@@ -143,6 +157,37 @@ namespace JoyCastle.BugReporter {
                         _foldBtnText = foldBtnTr.Find("Text")?.GetComponent<Text>();
                         _foldBtn?.onClick.AddListener(OnFoldClicked);
                     }
+                }
+
+                // 优先级 Dropdown
+                var priorityTr = contentTr.Find("InputPriority_Dropdown");
+                if (priorityTr != null) {
+                    _priorityItem = priorityTr.gameObject;
+                    _priorityDropdown = priorityTr.Find("Dropdown")?.GetComponent<Dropdown>();
+                    SetupDropdown(_priorityDropdown, new List<string> {
+                        "P0_紧急", "P1_优先", "P2_一般", "P3_一般般"
+                    });
+                }
+
+                // 严重程度 Dropdown
+                var significanceTr = contentTr.Find("InputSignificance_Dropdown");
+                if (significanceTr != null) {
+                    _significanceItem = significanceTr.gameObject;
+                    _significanceDropdown = significanceTr.Find("Dropdown")?.GetComponent<Dropdown>();
+                    SetupDropdown(_significanceDropdown, new List<string> {
+                        "S0_致命", "S1_严重", "S2_一般", "S3_轻微"
+                    });
+                }
+
+                // 发现阶段 Dropdown
+                var discoveryStageTr = contentTr.Find("InputDiscoveryStage_Dropdown");
+                if (discoveryStageTr != null) {
+                    _discoveryStageItem = discoveryStageTr.gameObject;
+                    _discoveryStageDropdown = discoveryStageTr.Find("Dropdown")?.GetComponent<Dropdown>();
+                    SetupDropdown(_discoveryStageDropdown, new List<string> {
+                        "首轮测试", "交叉测试", "全功能测试", "线上阶段",
+                        "Release测试", "灰度测试", "策划验收"
+                    });
                 }
 
                 // InfoItem 模板
@@ -291,6 +336,17 @@ namespace JoyCastle.BugReporter {
                 report.Fields["issueTitle"] = issueTitle;
             }
 
+            // Dropdown 选择项上报
+            if (_priorityDropdown != null) {
+                report.Fields["priority"] = _priorityDropdown.options[_priorityDropdown.value].text;
+            }
+            if (_significanceDropdown != null) {
+                report.Fields["significance"] = _significanceDropdown.options[_significanceDropdown.value].text;
+            }
+            if (_discoveryStageDropdown != null) {
+                report.Fields["discoveryStage"] = _discoveryStageDropdown.options[_discoveryStageDropdown.value].text;
+            }
+
             // 合并视频采集器的数据
             var videoCollector = BugReporterSDK.GetVideoCollector();
             if (videoCollector is { HasVideo: true }) {
@@ -325,11 +381,13 @@ namespace JoyCastle.BugReporter {
         private void PopulateInfoList(Dictionary<string, string> fields) {
             if (_contentParent == null || _infoItemTemplate == null) return;
 
-            // 清除之前生成的 item（保留模板、IssueTitle、VideoItem、Fold）
+            // 清除之前生成的 item（保留模板、IssueTitle、VideoItem、Fold、Dropdown）
             for (var i = _contentParent.childCount - 1; i >= 0; i--) {
                 var child = _contentParent.GetChild(i).gameObject;
                 if (child != _infoItemTemplate && child != _issueTitleItem
-                    && child != _videoItem && child != _foldItem) {
+                    && child != _videoItem && child != _foldItem
+                    && child != _priorityItem && child != _significanceItem
+                    && child != _discoveryStageItem) {
                     Destroy(child);
                 }
             }
@@ -353,6 +411,14 @@ namespace JoyCastle.BugReporter {
 
                 _infoItems.Add(item);
             }
+        }
+
+        private static void SetupDropdown(Dropdown dropdown, List<string> options) {
+            if (dropdown == null) return;
+            dropdown.ClearOptions();
+            dropdown.AddOptions(options);
+            dropdown.value = 0;
+            dropdown.RefreshShownValue();
         }
 
         private void ShowScreenshot(byte[] pngBytes) {
