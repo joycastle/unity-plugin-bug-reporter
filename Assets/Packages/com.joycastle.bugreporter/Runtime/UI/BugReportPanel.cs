@@ -27,13 +27,20 @@ namespace JoyCastle.BugReporter {
         private Button _collectBtn;
         private Button _getBtn;
         private Button _selectVideoBtn;
+        private Button _foldBtn;
+        private Text _foldBtnText;
         private Text _videoKeyText;
         private Transform _contentParent;
         private GameObject _infoItemTemplate;
         private GameObject _issueTitleItem;
         private InputField _issueTitleInput;
         private GameObject _videoItem;
+        private GameObject _foldItem;
         private RawImage _screenshotRawImage;
+
+        // 采集信息展开/收起状态
+        private bool _infoExpanded;
+        private readonly List<GameObject> _infoItems = new();
 
         // 采集缓存（打开时采集一次，上报时直接用）
         private Dictionary<string, string> _cachedFields;
@@ -75,13 +82,18 @@ namespace JoyCastle.BugReporter {
                 _collectBtn = null;
                 _getBtn = null;
                 _selectVideoBtn = null;
+                _foldBtn = null;
+                _foldBtnText = null;
                 _videoKeyText = null;
                 _contentParent = null;
                 _infoItemTemplate = null;
                 _issueTitleItem = null;
                 _issueTitleInput = null;
                 _videoItem = null;
+                _foldItem = null;
                 _screenshotRawImage = null;
+                _infoExpanded = false;
+                _infoItems.Clear();
                 _cachedFields = null;
                 _cachedFiles = null;
             }
@@ -118,6 +130,18 @@ namespace JoyCastle.BugReporter {
                     if (selectBtnTr != null) {
                         _selectVideoBtn = selectBtnTr.GetComponent<Button>();
                         _selectVideoBtn?.onClick.AddListener(OnSelectVideoClicked);
+                    }
+                }
+
+                // Fold 展开/收起按钮
+                var foldTr = contentTr.Find("Fold");
+                if (foldTr != null) {
+                    _foldItem = foldTr.gameObject;
+                    var foldBtnTr = foldTr.Find("FoldBtn");
+                    if (foldBtnTr != null) {
+                        _foldBtn = foldBtnTr.GetComponent<Button>();
+                        _foldBtnText = foldBtnTr.Find("Text")?.GetComponent<Text>();
+                        _foldBtn?.onClick.AddListener(OnFoldClicked);
                     }
                 }
 
@@ -212,6 +236,18 @@ namespace JoyCastle.BugReporter {
             }
         }
 
+        // ── FoldBtn: 展开/收起采集信息 ──
+
+        private void OnFoldClicked() {
+            _infoExpanded = !_infoExpanded;
+            foreach (var item in _infoItems) {
+                if (item != null) item.SetActive(_infoExpanded);
+            }
+            if (_foldBtnText != null) {
+                _foldBtnText.text = _infoExpanded ? "收起" : "展开";
+            }
+        }
+
         // ── SelectVideoBtn: 选择视频 ──
 
         private void OnSelectVideoClicked() {
@@ -289,17 +325,21 @@ namespace JoyCastle.BugReporter {
         private void PopulateInfoList(Dictionary<string, string> fields) {
             if (_contentParent == null || _infoItemTemplate == null) return;
 
-            // 清除之前生成的 item（保留模板、IssueTitle、VideoItem）
+            // 清除之前生成的 item（保留模板、IssueTitle、VideoItem、Fold）
             for (var i = _contentParent.childCount - 1; i >= 0; i--) {
                 var child = _contentParent.GetChild(i).gameObject;
-                if (child != _infoItemTemplate && child != _issueTitleItem && child != _videoItem) {
+                if (child != _infoItemTemplate && child != _issueTitleItem
+                    && child != _videoItem && child != _foldItem) {
                     Destroy(child);
                 }
             }
 
+            _infoItems.Clear();
+
             foreach (var kv in fields) {
                 var item = Instantiate(_infoItemTemplate, _contentParent);
-                item.SetActive(true);
+                // 默认隐藏，等用户点展开才显示
+                item.SetActive(_infoExpanded);
 
                 var keyText = item.transform.Find("key")?.GetComponent<Text>();
                 var valueText = item.transform.Find("value")?.GetComponent<Text>();
@@ -310,6 +350,8 @@ namespace JoyCastle.BugReporter {
                         ? kv.Value.Substring(0, 200) + "..."
                         : kv.Value ?? "";
                 }
+
+                _infoItems.Add(item);
             }
         }
 
