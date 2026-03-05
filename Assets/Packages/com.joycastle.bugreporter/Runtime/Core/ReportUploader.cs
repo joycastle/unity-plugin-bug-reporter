@@ -24,8 +24,12 @@ namespace JoyCastle.BugReporter {
             var fields = report.Fields ?? new Dictionary<string, string>();
             var dataMap = new Dictionary<string, string>();
 
-            // 映射字段
-            dataMap["title"] = GetField(fields, "issueTitle", report.Description ?? "");
+            // 映射字段 → 后端 field_key
+            dataMap["name"] = GetField(fields, "issueTitle", report.Description ?? "");
+            dataMap["description"] = GetField(fields, "issueDec", "");
+            dataMap["priority"] = GetField(fields, "priority", "2");
+            dataMap["field_805908"] = GetField(fields, "significance", "_ctjyqcki");
+            dataMap["issue_stage"] = GetField(fields, "discoveryStage", "stage_test");
             dataMap["userId"] = GetField(fields, "userId", "");
 
             var deviceModel = GetField(fields, "deviceModel", "");
@@ -39,9 +43,16 @@ namespace JoyCastle.BugReporter {
             dataMap["commit"] = GetField(fields, "gitCommit", "");
             dataMap["appId"] = report.AppId ?? "";
 
+            // 解决版本 & 发现版本：统一用 bug 版本
+            var issueVersion = GetField(fields, "issueVersion", "");
+            dataMap["resolve_version"] = issueVersion;
+            dataMap["discovery_version"] = issueVersion;
+
             // 其他未映射的字段也放进 data
             var mappedKeys = new HashSet<string> {
-                "issueTitle", "userId", "deviceModel", "osVersion",
+                "issueTitle", "issueDec", "issueVersion",
+                "priority", "significance", "discoveryStage",
+                "userId", "deviceModel", "osVersion",
                 "versionName", "gitBranch", "gitCommit"
             };
             foreach (var kv in fields) {

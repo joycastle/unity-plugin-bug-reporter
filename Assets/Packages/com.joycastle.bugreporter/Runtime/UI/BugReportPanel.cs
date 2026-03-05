@@ -34,6 +34,10 @@ namespace JoyCastle.BugReporter {
         private GameObject _infoItemTemplate;
         private GameObject _issueTitleItem;
         private InputField _issueTitleInput;
+        private GameObject _issueDecItem;
+        private InputField _issueDecInput;
+        private GameObject _issueVersionItem;
+        private InputField _issueVersionInput;
         private GameObject _videoItem;
         private GameObject _foldItem;
         private RawImage _screenshotRawImage;
@@ -45,6 +49,16 @@ namespace JoyCastle.BugReporter {
         private GameObject _priorityItem;
         private GameObject _significanceItem;
         private GameObject _discoveryStageItem;
+
+        // Dropdown 选项对应的后端 ID
+        private static readonly string[] PriorityIds = { "0", "1", "2", "99" };
+        private static readonly string[] SignificanceIds = {
+            "n53036kov", "l9rakulgc", "_ctjyqcki", "4jg47d2um"
+        };
+        private static readonly string[] DiscoveryStageIds = {
+            "stage_test", "0xta7xoxa", "stage_smoke", "stage_online",
+            "8n8_7zgxy", "bd893ou5c", "pfdvxqogh"
+        };
 
         // 采集信息展开/收起状态
         private bool _infoExpanded;
@@ -97,6 +111,10 @@ namespace JoyCastle.BugReporter {
                 _infoItemTemplate = null;
                 _issueTitleItem = null;
                 _issueTitleInput = null;
+                _issueDecItem = null;
+                _issueDecInput = null;
+                _issueVersionItem = null;
+                _issueVersionInput = null;
                 _videoItem = null;
                 _foldItem = null;
                 _screenshotRawImage = null;
@@ -133,6 +151,20 @@ namespace JoyCastle.BugReporter {
                 if (issueTitleTr != null) {
                     _issueTitleItem = issueTitleTr.gameObject;
                     _issueTitleInput = issueTitleTr.Find("InputField")?.GetComponent<InputField>();
+                }
+
+                // IssueDec 描述输入项
+                var issueDecTr = contentTr.Find("InputItem_IssueDec");
+                if (issueDecTr != null) {
+                    _issueDecItem = issueDecTr.gameObject;
+                    _issueDecInput = issueDecTr.Find("InputField")?.GetComponent<InputField>();
+                }
+
+                // IssueVersion 版本输入项
+                var issueVersionTr = contentTr.Find("InputItem_IssueVersion");
+                if (issueVersionTr != null) {
+                    _issueVersionItem = issueVersionTr.gameObject;
+                    _issueVersionInput = issueVersionTr.Find("InputField")?.GetComponent<InputField>();
                 }
 
                 // 视频选择项
@@ -336,15 +368,24 @@ namespace JoyCastle.BugReporter {
                 report.Fields["issueTitle"] = issueTitle;
             }
 
-            // Dropdown 选择项上报
+            // 描述上报（空也上报）
+            report.Fields["issueDec"] = _issueDecInput != null ? _issueDecInput.text : "";
+
+            // 版本上报
+            var issueVersion = _issueVersionInput != null ? _issueVersionInput.text : "";
+            if (!string.IsNullOrEmpty(issueVersion)) {
+                report.Fields["issueVersion"] = issueVersion;
+            }
+
+            // Dropdown 选择项上报（传 ID 值）
             if (_priorityDropdown != null) {
-                report.Fields["priority"] = _priorityDropdown.options[_priorityDropdown.value].text;
+                report.Fields["priority"] = PriorityIds[_priorityDropdown.value];
             }
             if (_significanceDropdown != null) {
-                report.Fields["significance"] = _significanceDropdown.options[_significanceDropdown.value].text;
+                report.Fields["significance"] = SignificanceIds[_significanceDropdown.value];
             }
             if (_discoveryStageDropdown != null) {
-                report.Fields["discoveryStage"] = _discoveryStageDropdown.options[_discoveryStageDropdown.value].text;
+                report.Fields["discoveryStage"] = DiscoveryStageIds[_discoveryStageDropdown.value];
             }
 
             // 合并视频采集器的数据
@@ -385,6 +426,7 @@ namespace JoyCastle.BugReporter {
             for (var i = _contentParent.childCount - 1; i >= 0; i--) {
                 var child = _contentParent.GetChild(i).gameObject;
                 if (child != _infoItemTemplate && child != _issueTitleItem
+                    && child != _issueDecItem && child != _issueVersionItem
                     && child != _videoItem && child != _foldItem
                     && child != _priorityItem && child != _significanceItem
                     && child != _discoveryStageItem) {
