@@ -20,50 +20,39 @@ namespace JoyCastle.BugReporter {
         public IEnumerator Upload(BugReport report, Action<bool, string> onComplete = null) {
             var form = new List<IMultipartFormSection>();
 
-            // ── 字段映射：SDK 内部字段名 → 后端字段名 ──
+            // ── 构建 data JSON ──
             var fields = report.Fields ?? new Dictionary<string, string>();
+            var dataMap = new Dictionary<string, string>();
 
-            // title: 优先用 issueTitle，fallback 到 Description
-            var title = GetField(fields, "issueTitle", report.Description ?? "");
-            form.Add(new MultipartFormDataSection("title", title));
+            // 映射字段
+            dataMap["title"] = GetField(fields, "issueTitle", report.Description ?? "");
+            dataMap["userId"] = GetField(fields, "userId", "");
 
-            // userId
-            var userId = GetField(fields, "userId", "");
-            form.Add(new MultipartFormDataSection("userId", userId));
-
-            // device: 合并 deviceModel + osVersion
             var deviceModel = GetField(fields, "deviceModel", "");
             var osVersion = GetField(fields, "osVersion", "");
-            var device = !string.IsNullOrEmpty(deviceModel) && !string.IsNullOrEmpty(osVersion)
+            dataMap["device"] = !string.IsNullOrEmpty(deviceModel) && !string.IsNullOrEmpty(osVersion)
                 ? $"{deviceModel} / {osVersion}"
                 : deviceModel + osVersion;
-            form.Add(new MultipartFormDataSection("device", device));
 
-            // version
-            var version = GetField(fields, "versionName", "");
-            form.Add(new MultipartFormDataSection("version", version));
+            dataMap["version"] = GetField(fields, "versionName", "");
+            dataMap["branch"] = GetField(fields, "gitBranch", "");
+            dataMap["commit"] = GetField(fields, "gitCommit", "");
+            dataMap["appId"] = report.AppId ?? "";
 
-            // branch
-            var branch = GetField(fields, "gitBranch", "");
-            form.Add(new MultipartFormDataSection("branch", branch));
-
-            // commit
-            var commit = GetField(fields, "gitCommit", "");
-            form.Add(new MultipartFormDataSection("commit", commit));
-
-            // appId
-            form.Add(new MultipartFormDataSection("appId", report.AppId ?? ""));
-
-            // 其他未映射的文本字段也带上
+            // 其他未映射的字段也放进 data
             var mappedKeys = new HashSet<string> {
                 "issueTitle", "userId", "deviceModel", "osVersion",
                 "versionName", "gitBranch", "gitCommit"
             };
             foreach (var kv in fields) {
                 if (!mappedKeys.Contains(kv.Key)) {
-                    form.Add(new MultipartFormDataSection(kv.Key, kv.Value ?? ""));
+                    dataMap[kv.Key] = kv.Value ?? "";
                 }
             }
+
+            // 序列化为 JSON
+            var dataJson = DictToJson(dataMap);
+            form.Add(new MultipartFormDataSection("data", dataJson, Encoding.UTF8, "application/json"));
 
             // ── 所有文件统一用 "files" 作为字段名 ──
             if (report.Files != null) {
@@ -71,7 +60,6 @@ namespace JoyCastle.BugReporter {
                     var fileName = kv.Key;
                     var mime = DetectMime(kv.Value, fileName);
 
-                    // 确保文件名有扩展名
                     if (!fileName.Contains(".")) {
                         fileName += "." + DetectExt(kv.Value);
                     }
@@ -85,17 +73,11 @@ namespace JoyCastle.BugReporter {
             sb.AppendLine("[BugReporter] ===== Upload Details =====");
             sb.AppendLine($"  URL: {_serverUrl}");
             sb.AppendLine($"  Token: {(string.IsNullOrEmpty(_webhookToken) ? "(none)" : _webhookToken.Substring(0, 8) + "...")}");
+            sb.AppendLine($"  [data] {dataJson}");
             foreach (var section in form) {
-                var name = section.sectionName;
-                var data = section.sectionData;
-                var file = section.fileName;
-                if (!string.IsNullOrEmpty(file)) {
-                    var sizeMB = data != null ? data.Length / (1024f * 1024f) : 0;
-                    sb.AppendLine($"  [File] {name}={file} ({sizeMB:F2}MB)");
-                } else {
-                    var value = data != null ? Encoding.UTF8.GetString(data) : "";
-                    if (value.Length > 100) value = value.Substring(0, 100) + "...";
-                    sb.AppendLine($"  [Field] {name}={value}");
+                if (!string.IsNullOrEmpty(section.fileName)) {
+                    var sizeMB = section.sectionData != null ? section.sectionData.Length / (1024f * 1024f) : 0;
+                    sb.AppendLine($"  [File] {section.fileName} ({sizeMB:F2}MB)");
                 }
             }
             sb.AppendLine("[BugReporter] ========================");
@@ -105,7 +87,6 @@ namespace JoyCastle.BugReporter {
             using var request = UnityWebRequest.Post(_serverUrl, form);
             request.timeout = _timeout;
 
-            // 添加认证 Header
             if (!string.IsNullOrEmpty(_webhookToken)) {
                 request.SetRequestHeader("X-Webhook-Token", _webhookToken);
             }
@@ -128,22 +109,45 @@ namespace JoyCastle.BugReporter {
                 : fallback;
         }
 
+        /// <summary>
+        /// 简单的 Dictionary → JSON 序列化，避免引入额外依赖。
+        /// </summary>
+        private static string DictToJson(Dictionary<string, string> dict) {
+            var sb = new StringBuilder();
+            sb.Append("{");
+            var first = true;
+            foreach (var kv in dict) {
+                if (!first) sb.Append(",");
+                sb.Append("\"");
+                sb.Append(EscapeJson(kv.Key));
+                sb.Append("\":\"");
+                sb.Append(EscapeJson(kv.Value));
+                sb.Append("\"");
+                first = false;
+            }
+            sb.Append("}");
+            return sb.ToString();
+        }
+
+        private static string EscapeJson(string s) {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("\\", "\\\\")
+                    .Replace("\"", "\\\"")
+                    .Replace("\n", "\\n")
+                    .Replace("\r", "\\r")
+                    .Replace("\t", "\\t");
+        }
+
         private static string DetectMime(byte[] data, string fileName) {
-            // PNG
             if (data.Length > 4 && data[0] == 0x89 && data[1] == 0x50)
                 return "image/png";
-            // JPEG
             if (data.Length > 2 && data[0] == 0xFF && data[1] == 0xD8)
                 return "image/jpeg";
-            // MP4 (ftyp)
             if (data.Length > 8 && data[4] == 0x66 && data[5] == 0x74
                 && data[6] == 0x79 && data[7] == 0x70)
                 return "video/mp4";
-
-            // 按文件名后缀判断
             if (fileName.EndsWith(".log") || fileName.EndsWith(".txt"))
                 return "text/plain";
-
             return "application/octet-stream";
         }
 
