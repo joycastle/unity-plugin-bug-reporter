@@ -160,7 +160,7 @@ namespace JoyCastle.BugReporter {
                 var actualKey = collectorToFieldKey.TryGetValue(kv.Key, out var mapped) ? mapped : kv.Key;
                 if (metadataKeys.Contains(actualKey)) continue;
                 if (skipKeys.Contains(kv.Key) && metadataKeys.Contains(mapped ?? "")) continue;
-                if (kv.Key == "runtimeLog") continue;
+                if (kv.Key == "runtimeLog" || kv.Key.StartsWith("logFile")) continue;
 
                 if (!first) sb.Append(",");
                 first = false;

@@ -62,32 +62,37 @@ namespace JoyCastle.BugReporter {
                 result.Fields["runtimeLog"] = sb.ToString();
             }
 
-            // 2. 日志文件（逐个读取尾部内容）
+            // 2. 日志文件（逐个读取，作为文件附件上传）
             for (var i = 0; i < _logFilePaths.Count; i++) {
                 var path = _logFilePaths[i];
-                var content = ReadLogFileTail(path);
-                if (content != null) {
-                    var fieldKey = _logFilePaths.Count == 1
-                        ? "logFile"
-                        : $"logFile_{i}";
-                    result.Fields[fieldKey] = content;
+                var bytes = ReadLogFileBytes(path);
+                if (bytes != null) {
+                    var fileName = _logFilePaths.Count == 1
+                        ? "logFile.log"
+                        : $"logFile_{i}.log";
+                    result.Files[fileName] = bytes;
                 }
             }
 
             return result;
         }
 
-        private string ReadLogFileTail(string path) {
+        private byte[] ReadLogFileBytes(string path) {
             try {
                 if (!File.Exists(path)) return null;
                 var fileInfo = new FileInfo(path);
                 using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                var readBytes = Math.Min(_maxFileReadBytes, fileInfo.Length);
+                var readBytes = (int)Math.Min(_maxFileReadBytes, fileInfo.Length);
                 if (readBytes <= 0) return null;
                 stream.Seek(-readBytes, SeekOrigin.End);
                 var buffer = new byte[readBytes];
-                stream.Read(buffer, 0, buffer.Length);
-                return Encoding.UTF8.GetString(buffer);
+                var actualRead = stream.Read(buffer, 0, buffer.Length);
+                if (actualRead < buffer.Length) {
+                    var trimmed = new byte[actualRead];
+                    Array.Copy(buffer, trimmed, actualRead);
+                    return trimmed;
+                }
+                return buffer;
             } catch (Exception e) {
                 Debug.LogWarning($"[BugReporter] Failed to read log file '{path}': {e.Message}");
                 return null;
