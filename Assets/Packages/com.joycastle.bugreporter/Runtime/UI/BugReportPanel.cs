@@ -137,16 +137,16 @@ namespace JoyCastle.BugReporter {
             }
 
             // InfoItem 模板 和 InputItem_IssueTitle（在 Content 下）
+            // IssueTitle 输入项（已挪到 CollectInfoPanel 直接子节点）
+            var issueTitleTr = root.Find("Panel/CollectInfoPanel/InputItem_IssueTitle");
+            if (issueTitleTr != null) {
+                _issueTitleItem = issueTitleTr.gameObject;
+                _issueTitleInput = issueTitleTr.Find("InputField")?.GetComponent<InputField>();
+            }
+
             var contentTr = root.Find("Panel/CollectInfoPanel/Scroll View/Viewport/Content");
             if (contentTr != null) {
                 _contentParent = contentTr;
-
-                // IssueTitle 输入项
-                var issueTitleTr = contentTr.Find("InputItem_IssueTitle");
-                if (issueTitleTr != null) {
-                    _issueTitleItem = issueTitleTr.gameObject;
-                    _issueTitleInput = issueTitleTr.Find("InputField")?.GetComponent<InputField>();
-                }
 
                 // 视频选择项
                 var videoTr = contentTr.Find("InputVideo_BugVideo");
@@ -208,7 +208,8 @@ namespace JoyCastle.BugReporter {
 
         /// <summary>
         /// 根据字段元数据动态创建 Dropdown。
-        /// 使用 InputPrefab_Dropdown 模板实例化，放在 Fold 之前。
+        /// 使用 InputPrefab_Dropdown 模板实例化，每行包含 LeftDropdown / RightDropdown 两个位置。
+        /// 每两个字段共用一行，如果总数为奇数则最后一行右侧隐藏。
         /// </summary>
         private void CreateDynamicDropdowns() {
             if (_contentParent == null || _dropdownTemplate == null) return;
@@ -226,13 +227,24 @@ namespace JoyCastle.BugReporter {
                 dropdownFields.Add(field);
             }
 
-            // 找到 InputVideo_BugVideo 的 sibling index，动态 Dropdown 插在它前面
-            var videoIndex = _videoItem != null ? _videoItem.transform.GetSiblingIndex() : _contentParent.childCount;
+            // 按指定顺序排列 Dropdown 字段，不在列表中的排到后面
+            var fieldOrder = new List<string> {
+                "priority",           // 优先级
+                "field_805908",       // 严重性
+                "discovery_version",  // 发现版本
+                "resolve_version",    // 解决版本
+                "issue_stage",        // 发现阶段
+            };
+            dropdownFields.Sort((a, b) => {
+                var idxA = fieldOrder.IndexOf(a.field_key);
+                var idxB = fieldOrder.IndexOf(b.field_key);
+                if (idxA < 0) idxA = fieldOrder.Count;
+                if (idxB < 0) idxB = fieldOrder.Count;
+                return idxA.CompareTo(idxB);
+            });
 
-            for (var i = 0; i < dropdownFields.Count; i++) {
-                var field = dropdownFields[i];
-
-                // 对 work_item_related_multi_select（版本类）选项按 value 数字从大到小排序
+            // 对 work_item_related_multi_select（版本类）选项按 value 数字从大到小排序
+            foreach (var field in dropdownFields) {
                 if (field.field_type == "work_item_related_multi_select") {
                     field.options.Sort((a, b) => {
                         long.TryParse(b.value, out var bv);
@@ -240,64 +252,78 @@ namespace JoyCastle.BugReporter {
                         return bv.CompareTo(av);
                     });
                 }
+            }
+
+            // 追加本地自定义字段"是否AI修复"（非服务器字段，统一放入列表一起排布）
+            // 用 null 占位，后续特殊处理
+            dropdownFields.Add(null); // ai_fix 占位
+
+            // 找到 InputVideo_BugVideo 的 sibling index，动态 Dropdown 行插在它前面
+            var videoIndex = _videoItem != null ? _videoItem.transform.GetSiblingIndex() : _contentParent.childCount;
+
+            // 每两个字段实例化一行模板
+            var rowCount = (dropdownFields.Count + 1) / 2;
+            for (var row = 0; row < rowCount; row++) {
+                var leftIdx = row * 2;
+                var rightIdx = row * 2 + 1;
 
                 var itemGo = Instantiate(_dropdownTemplate, _contentParent);
-                itemGo.name = $"Dynamic_{field.field_key}";
+                itemGo.name = $"DynamicRow_{row}";
                 itemGo.SetActive(true);
 
-                // 设置 key 标签为字段名
-                var keyText = itemGo.transform.Find("key")?.GetComponent<Text>();
-                if (keyText != null) {
-                    keyText.text = field.field_name + ":";
+                // ── 左侧 ──
+                FillDropdownSide(itemGo.transform.Find("LeftDropdown"), dropdownFields[leftIdx]);
+
+                // ── 右侧 ──
+                var rightSide = itemGo.transform.Find("RightDropdown");
+                if (rightIdx < dropdownFields.Count) {
+                    FillDropdownSide(rightSide, dropdownFields[rightIdx]);
+                } else if (rightSide != null) {
+                    // 奇数个字段，最后一行右侧隐藏
+                    rightSide.gameObject.SetActive(false);
                 }
 
-                // 填充 Dropdown 选项
-                var dropdown = itemGo.transform.Find("Dropdown")?.GetComponent<Dropdown>();
-                if (dropdown != null) {
-                    dropdown.ClearOptions();
+                // 插到 InputVideo_BugVideo 之前
+                itemGo.transform.SetSiblingIndex(videoIndex + row);
+
+                _dynamicDropdownItems.Add(itemGo);
+            }
+        }
+
+        /// <summary>
+        /// 填充一行模板中某一侧（LeftDropdown / RightDropdown）的 key 和 Dropdown。
+        /// field 为 null 时表示本地自定义的"是否AI修复"字段。
+        /// </summary>
+        private void FillDropdownSide(Transform side, FieldDefinition field) {
+            if (side == null) return;
+
+            var isAiFix = field == null;
+            var fieldKey = isAiFix ? "ai_fix" : field.field_key;
+            var fieldName = isAiFix ? "是否AI修复" : field.field_name;
+
+            // 设置 key 标签
+            var keyText = side.Find("key")?.GetComponent<Text>();
+            if (keyText != null) {
+                keyText.text = fieldName + ":";
+            }
+
+            // 填充 Dropdown 选项
+            var dropdown = side.Find("Dropdown")?.GetComponent<Dropdown>();
+            if (dropdown != null) {
+                dropdown.ClearOptions();
+                if (isAiFix) {
+                    dropdown.AddOptions(new List<string> { "False", "True" });
+                } else {
                     var options = new List<string>();
                     foreach (var opt in field.options) {
                         options.Add(opt.label);
                     }
                     dropdown.AddOptions(options);
-                    dropdown.value = 0;
-                    dropdown.RefreshShownValue();
-                    _dynamicDropdowns[field.field_key] = dropdown;
                 }
-
-                // 插到 InputVideo_BugVideo 之前
-                itemGo.transform.SetSiblingIndex(videoIndex + i);
-
-                _dynamicDropdownItems.Add(itemGo);
-            }
-
-            // 创建"是否AI修复" Dropdown（非服务器字段，本地自定义）
-            CreateAiFixDropdown(videoIndex + dropdownFields.Count);
-        }
-
-        private void CreateAiFixDropdown(int siblingIndex) {
-            if (_dropdownTemplate == null || _contentParent == null) return;
-
-            var itemGo = Instantiate(_dropdownTemplate, _contentParent);
-            itemGo.name = "Dynamic_ai_fix";
-            itemGo.SetActive(true);
-
-            var keyText = itemGo.transform.Find("key")?.GetComponent<Text>();
-            if (keyText != null) {
-                keyText.text = "是否AI修复:";
-            }
-
-            var dropdown = itemGo.transform.Find("Dropdown")?.GetComponent<Dropdown>();
-            if (dropdown != null) {
-                dropdown.ClearOptions();
-                dropdown.AddOptions(new List<string> { "False", "True" });
-                dropdown.value = 0; // 默认 False
+                dropdown.value = 0;
                 dropdown.RefreshShownValue();
-                _dynamicDropdowns["ai_fix"] = dropdown;
+                _dynamicDropdowns[fieldKey] = dropdown;
             }
-
-            itemGo.transform.SetSiblingIndex(siblingIndex);
-            _dynamicDropdownItems.Add(itemGo);
         }
 
         private static void DestroyIfExists(Transform parent, string childName) {
@@ -566,7 +592,7 @@ namespace JoyCastle.BugReporter {
 
             // 收集需要保留的 GameObject
             var keepSet = new HashSet<GameObject> {
-                _infoItemTemplate, _dropdownTemplate, _issueTitleItem,
+                _infoItemTemplate, _dropdownTemplate,
                 _screenshotBtnItem, _videoItem, _foldItem
             };
             foreach (var item in _dynamicDropdownItems) {
