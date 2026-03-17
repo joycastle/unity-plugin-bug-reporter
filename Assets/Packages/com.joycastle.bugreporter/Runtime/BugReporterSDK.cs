@@ -164,7 +164,8 @@ namespace JoyCastle.BugReporter {
                 yield break;
             }
 
-            var fieldsUrl = _config.serverUrl.TrimEnd('/') + "/api/issue/fields";
+            var deviceId = SystemInfo.deviceUniqueIdentifier;
+            var fieldsUrl = _config.serverUrl.TrimEnd('/') + "/api/issue/fields?device_id=" + UnityWebRequest.EscapeURL(deviceId);
             using var request = UnityWebRequest.Get(fieldsUrl);
             request.timeout = 10;
 
@@ -187,12 +188,137 @@ namespace JoyCastle.BugReporter {
                     Debug.LogError("[BugReporter] Field metadata is empty. Bug reporting disabled.");
                     yield break;
                 }
-
                 s_fieldMetadata.Load(response.fields);
+
+                // 解析 preferences
+                var preferences = ParsePreferences(json);
+                s_fieldMetadata.SetPreferences(preferences);
+
                 Debug.Log($"[BugReporter] Field metadata loaded: {response.fields.Count} fields.");
             } catch (Exception e) {
                 Debug.LogError($"[BugReporter] Failed to parse field metadata: {e.Message}. Bug reporting disabled.");
             }
+        }
+
+        /// <summary>
+        /// 从 JSON 响应中手动解析 preferences 字段。
+        /// 值的类型：字符串、数组（取第一个元素）、对象（取 value 字段）。
+        /// </summary>
+        private static Dictionary<string, string> ParsePreferences(string json) {
+            var result = new Dictionary<string, string>();
+            var prefKey = "\"preferences\"";
+            var prefIdx = json.IndexOf(prefKey, StringComparison.Ordinal);
+            if (prefIdx < 0) return result;
+
+            // 找到 preferences 对象的起始 '{'
+            var objStart = json.IndexOf('{', prefIdx + prefKey.Length);
+            if (objStart < 0) return result;
+
+            // 找到匹配的 '}'
+            var objEnd = FindMatchingBrace(json, objStart);
+            if (objEnd < 0) return result;
+
+            var prefJson = json.Substring(objStart + 1, objEnd - objStart - 1);
+
+            // 逐个解析 key-value
+            var pos = 0;
+            while (pos < prefJson.Length) {
+                // 找 key
+                var keyStart = prefJson.IndexOf('"', pos);
+                if (keyStart < 0) break;
+                var keyEnd = prefJson.IndexOf('"', keyStart + 1);
+                if (keyEnd < 0) break;
+                var key = prefJson.Substring(keyStart + 1, keyEnd - keyStart - 1);
+
+                // 找冒号后的值
+                var colonIdx = prefJson.IndexOf(':', keyEnd + 1);
+                if (colonIdx < 0) break;
+
+                pos = colonIdx + 1;
+                // 跳过空白
+                while (pos < prefJson.Length && char.IsWhiteSpace(prefJson[pos])) pos++;
+                if (pos >= prefJson.Length) break;
+
+                string value;
+                if (prefJson[pos] == '{') {
+                    // 对象：提取 "value" 字段
+                    var braceEnd = FindMatchingBrace(prefJson, pos);
+                    if (braceEnd < 0) break;
+                    var objContent = prefJson.Substring(pos, braceEnd - pos + 1);
+                    value = ExtractJsonStringField(objContent, "value");
+                    pos = braceEnd + 1;
+                } else if (prefJson[pos] == '[') {
+                    // 数组：取第一个元素
+                    var arrEnd = prefJson.IndexOf(']', pos);
+                    if (arrEnd < 0) break;
+                    var arrContent = prefJson.Substring(pos + 1, arrEnd - pos - 1).Trim();
+                    // 取第一个带引号的值
+                    var firstQuote = arrContent.IndexOf('"');
+                    if (firstQuote >= 0) {
+                        var secondQuote = arrContent.IndexOf('"', firstQuote + 1);
+                        value = secondQuote >= 0 ? arrContent.Substring(firstQuote + 1, secondQuote - firstQuote - 1) : "";
+                    } else {
+                        // 数字数组
+                        var comma = arrContent.IndexOf(',');
+                        value = comma >= 0 ? arrContent.Substring(0, comma).Trim() : arrContent.Trim();
+                    }
+                    pos = arrEnd + 1;
+                } else if (prefJson[pos] == '"') {
+                    // 字符串
+                    var valEnd = prefJson.IndexOf('"', pos + 1);
+                    if (valEnd < 0) break;
+                    value = prefJson.Substring(pos + 1, valEnd - pos - 1);
+                    pos = valEnd + 1;
+                } else {
+                    // 数字或其他
+                    var nextComma = prefJson.IndexOf(',', pos);
+                    var end = nextComma >= 0 ? nextComma : prefJson.Length;
+                    value = prefJson.Substring(pos, end - pos).Trim();
+                    pos = end;
+                }
+
+                if (!string.IsNullOrEmpty(value)) {
+                    result[key] = value;
+                }
+            }
+
+            Debug.Log($"[BugReporter] Parsed preferences: {result.Count} entries. Keys: {string.Join(", ", result.Keys)}");
+            return result;
+        }
+
+        /// <summary>
+        /// 找到与 json[start] 处的 '{' 匹配的 '}'。
+        /// </summary>
+        private static int FindMatchingBrace(string json, int start) {
+            var depth = 0;
+            for (var i = start; i < json.Length; i++) {
+                if (json[i] == '{') depth++;
+                else if (json[i] == '}') {
+                    depth--;
+                    if (depth == 0) return i;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// 从 JSON 对象字符串中提取指定 key 的字符串值。
+        /// 例如从 {"label":"P2_一般","value":"2"} 中提取 "value" → "2"。
+        /// </summary>
+        private static string ExtractJsonStringField(string jsonObj, string fieldName) {
+            var search = "\"" + fieldName + "\"";
+            var idx = jsonObj.IndexOf(search, StringComparison.Ordinal);
+            if (idx < 0) return "";
+
+            var colonIdx = jsonObj.IndexOf(':', idx + search.Length);
+            if (colonIdx < 0) return "";
+
+            var pos = colonIdx + 1;
+            while (pos < jsonObj.Length && char.IsWhiteSpace(jsonObj[pos])) pos++;
+            if (pos >= jsonObj.Length || jsonObj[pos] != '"') return "";
+
+            var valEnd = jsonObj.IndexOf('"', pos + 1);
+            return valEnd >= 0 ? jsonObj.Substring(pos + 1, valEnd - pos - 1) : "";
         }
 
         private void Update() {

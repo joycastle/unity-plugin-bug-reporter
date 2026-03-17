@@ -218,12 +218,14 @@ namespace JoyCastle.BugReporter {
             var dropdownFields = new List<FieldDefinition>();
             foreach (var field in metadata.Fields.Values) {
                 if (field.options == null || field.options.Count == 0) continue;
-                // select 和 work_item_related_multi_select 都用 Dropdown
-                if (field.field_type != "select" && field.field_type != "work_item_related_multi_select") continue;
+                // select、work_item_related_multi_select 和 multi_user 都用 Dropdown
+                if (field.field_type != "select" && field.field_type != "work_item_related_multi_select" && field.field_type != "multi_user") continue;
                 // name 和 description 用 InputField，不用 Dropdown
                 if (field.field_key == "name" || field.field_key == "description") continue;
                 // 跳过"出自测试用例"字段
                 if (field.field_name == "出自测试用例") continue;
+                // 跳过经办人和关注人字段
+                if (field.field_key == "issue_operator" || field.field_key == "watchers") continue;
                 dropdownFields.Add(field);
             }
 
@@ -231,9 +233,10 @@ namespace JoyCastle.BugReporter {
             var fieldOrder = new List<string> {
                 "priority",           // 优先级
                 "field_805908",       // 严重性
+                "issue_stage",        // 发现阶段
+                "issue_reporter",     // 报告人
                 "discovery_version",  // 发现版本
                 "resolve_version",    // 解决版本
-                "issue_stage",        // 发现阶段
             };
             dropdownFields.Sort((a, b) => {
                 var idxA = fieldOrder.IndexOf(a.field_key);
@@ -287,6 +290,34 @@ namespace JoyCastle.BugReporter {
                 itemGo.transform.SetSiblingIndex(videoIndex + row);
 
                 _dynamicDropdownItems.Add(itemGo);
+            }
+
+            // 应用 preferences 预填上次选择
+            ApplyPreferences(metadata);
+        }
+
+        /// <summary>
+        /// 根据服务器返回的 preferences 预选 Dropdown 值。
+        /// </summary>
+        private void ApplyPreferences(FieldMetadataManager metadata) {
+            foreach (var kv in _dynamicDropdowns) {
+                var fieldKey = kv.Key;
+                var dropdown = kv.Value;
+                if (dropdown == null) continue;
+
+                var prefValue = metadata.GetPreference(fieldKey);
+                if (string.IsNullOrEmpty(prefValue)) continue;
+
+                var fieldDef = metadata.Get(fieldKey);
+                if (fieldDef?.options == null) continue;
+
+                for (var i = 0; i < fieldDef.options.Count; i++) {
+                    if (fieldDef.options[i].value == prefValue || fieldDef.options[i].label == prefValue) {
+                        dropdown.value = i;
+                        dropdown.RefreshShownValue();
+                        break;
+                    }
+                }
             }
         }
 

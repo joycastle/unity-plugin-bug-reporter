@@ -30,6 +30,7 @@ namespace JoyCastle.BugReporter {
     /// </summary>
     public class FieldMetadataManager {
         private readonly Dictionary<string, FieldDefinition> _fieldMap = new();
+        private Dictionary<string, string> _preferences = new();
         private bool _ready;
 
         public bool IsReady => _ready;
@@ -45,6 +46,20 @@ namespace JoyCastle.BugReporter {
                 }
             }
             _ready = true;
+        }
+
+        /// <summary>
+        /// 设置设备偏好数据（上次选择的字段值）。
+        /// </summary>
+        public void SetPreferences(Dictionary<string, string> preferences) {
+            _preferences = preferences ?? new Dictionary<string, string>();
+        }
+
+        /// <summary>
+        /// 获取指定字段的偏好值，不存在返回 null。
+        /// </summary>
+        public string GetPreference(string fieldKey) {
+            return _preferences.TryGetValue(fieldKey, out var val) ? val : null;
         }
 
         /// <summary>
