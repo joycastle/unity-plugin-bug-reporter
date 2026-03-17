@@ -8,6 +8,7 @@ namespace JoyCastle.BugReporter {
         public CollectResult Collect() {
             return new CollectResult {
                 Fields = new() {
+                    ["deviceId"] = SystemInfo.deviceUniqueIdentifier,
                     ["deviceModel"] = SystemInfo.deviceModel,
                     ["osVersion"] = SystemInfo.operatingSystem,
                     ["memorySize"] = SystemInfo.systemMemorySize.ToString(),

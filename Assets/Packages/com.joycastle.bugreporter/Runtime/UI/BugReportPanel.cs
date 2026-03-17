@@ -313,14 +313,15 @@ namespace JoyCastle.BugReporter {
                 dropdown.ClearOptions();
                 if (isAiFix) {
                     dropdown.AddOptions(new List<string> { "False", "True" });
+                    dropdown.value = 1;
                 } else {
                     var options = new List<string>();
                     foreach (var opt in field.options) {
                         options.Add(opt.label);
                     }
                     dropdown.AddOptions(options);
+                    dropdown.value = 0;
                 }
-                dropdown.value = 0;
                 dropdown.RefreshShownValue();
                 _dynamicDropdowns[fieldKey] = dropdown;
             }
@@ -536,7 +537,7 @@ namespace JoyCastle.BugReporter {
             }
 
             // 描述固定内容上报
-            report.Fields["issueDec"] = "操作步骤：\n实际结果：\n期望结果：";
+            report.Fields["issueDec"] = "操作步骤：\n1.\n实际结果：\n1.\n期望结果：\n";
 
             // 动态 Dropdown 选择项上报：传 option 的 value
             var metadata = BugReporterSDK.GetFieldMetadata();
