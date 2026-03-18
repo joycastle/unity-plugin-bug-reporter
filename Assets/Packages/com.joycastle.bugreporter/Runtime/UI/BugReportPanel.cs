@@ -582,7 +582,7 @@ namespace JoyCastle.BugReporter {
             }
 
             // 描述固定内容上报
-            report.Fields["issueDec"] = "操作步骤：\n1.\n实际结果：\n1.\n期望结果：\n";
+            report.Fields["issueDec"] = "操作步骤：\n1.\n实际结果：\n\n期望结果：\n";
 
             // 动态 Dropdown 选择项上报：传 option 的 value
             var metadata = BugReporterSDK.GetFieldMetadata();
@@ -629,6 +629,8 @@ namespace JoyCastle.BugReporter {
             if (_collectBtn != null) {
                 _collectBtn.interactable = true;
             }
+
+            Hide();
         }
 
         // ── UI 填充 ──
