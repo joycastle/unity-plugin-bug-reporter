@@ -12,16 +12,12 @@ namespace JoyCastle.BugReporter {
         private readonly int _maxLines;
         private readonly Queue<string> _logBuffer;
         private readonly List<string> _logFilePaths = new();
-        private readonly int _maxFileReadBytes;
         private readonly bool _enableRuntimeLog;
 
         /// <param name="maxLines">运行时日志缓存行数</param>
         /// <param name="enableRuntimeLog">是否监听 Application.logMessageReceived</param>
-        /// <param name="maxFileReadBytes">每个日志文件最大读取字节数（默认 64KB）</param>
-        public LogCollector(int maxLines = 100, bool enableRuntimeLog = true,
-            int maxFileReadBytes = 65536) {
+        public LogCollector(int maxLines = 100, bool enableRuntimeLog = true) {
             _maxLines = maxLines;
-            _maxFileReadBytes = maxFileReadBytes;
             _enableRuntimeLog = enableRuntimeLog;
             _logBuffer = new Queue<string>(_maxLines);
             if (_enableRuntimeLog) {
@@ -80,19 +76,7 @@ namespace JoyCastle.BugReporter {
         private byte[] ReadLogFileBytes(string path) {
             try {
                 if (!File.Exists(path)) return null;
-                var fileInfo = new FileInfo(path);
-                using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                var readBytes = (int)Math.Min(_maxFileReadBytes, fileInfo.Length);
-                if (readBytes <= 0) return null;
-                stream.Seek(-readBytes, SeekOrigin.End);
-                var buffer = new byte[readBytes];
-                var actualRead = stream.Read(buffer, 0, buffer.Length);
-                if (actualRead < buffer.Length) {
-                    var trimmed = new byte[actualRead];
-                    Array.Copy(buffer, trimmed, actualRead);
-                    return trimmed;
-                }
-                return buffer;
+                return File.ReadAllBytes(path);
             } catch (Exception e) {
                 Debug.LogWarning($"[BugReporter] Failed to read log file '{path}': {e.Message}");
                 return null;
