@@ -79,16 +79,20 @@ namespace NativeFilePickerNamespace
 			// Add declared custom types to Info.plist
 			if( target == BuildTarget.iOS )
 			{
+				string plistPath = Path.Combine( buildPath, "Info.plist" );
+
+				PlistDocument plist = new PlistDocument();
+				plist.ReadFromString( File.ReadAllText( plistPath ) );
+
+				PlistElementDict rootDict = plist.root;
+
+				// Add NSPhotoLibraryUsageDescription for PHPicker video selection
+				if( rootDict["NSPhotoLibraryUsageDescription"] == null )
+					rootDict.SetString( "NSPhotoLibraryUsageDescription", "App needs access to your photo library to select videos for bug reports." );
+
 				NativeFilePickerCustomTypes.TypeHolder[] customTypes = NativeFilePickerCustomTypes.GetCustomTypes();
 				if( customTypes != null )
 				{
-					string plistPath = Path.Combine( buildPath, "Info.plist" );
-
-					PlistDocument plist = new PlistDocument();
-					plist.ReadFromString( File.ReadAllText( plistPath ) );
-
-					PlistElementDict rootDict = plist.root;
-
 					for( int i = 0; i < customTypes.Length; i++ )
 					{
 						NativeFilePickerCustomTypes.TypeHolder customType = customTypes[i];
@@ -110,9 +114,9 @@ namespace NativeFilePickerNamespace
 						for( int j = 0; j < customType.extensions.Length; j++ )
 							tagExtensions.AddString( customType.extensions[j] );
 					}
-
-					File.WriteAllText( plistPath, plist.WriteToString() );
 				}
+
+				File.WriteAllText( plistPath, plist.WriteToString() );
 			}
 
 			// Rest of the function shouldn't execute unless build post-processing is enabled
@@ -131,6 +135,8 @@ namespace NativeFilePickerNamespace
 				{
 					pbxProject.AddFrameworkToProject( targetGUID, "MobileCoreServices.framework", false );
 					pbxProject.AddFrameworkToProject( targetGUID, "CloudKit.framework", false );
+					pbxProject.AddFrameworkToProject( targetGUID, "PhotosUI.framework", false );
+					pbxProject.AddFrameworkToProject( targetGUID, "Photos.framework", false );
 				}
 
 				File.WriteAllText( pbxProjectPath, pbxProject.WriteToString() );

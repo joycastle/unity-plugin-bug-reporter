@@ -49,3 +49,5 @@ uploads/
 # Python
 __pycache__/
 *.pyc
+AndroidProject/unityLibrary
+AndroidProject

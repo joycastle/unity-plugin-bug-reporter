@@ -60,6 +60,9 @@ public static class NativeFilePicker
 
 	[System.Runtime.InteropServices.DllImport( "__Internal" )]
 	private static extern void _NativeFilePicker_ExportFiles( string[] files, int filesCount );
+
+	[System.Runtime.InteropServices.DllImport( "__Internal" )]
+	private static extern void _NativeFilePicker_PickVideoFromLibrary();
 #endif
 	#endregion
 
@@ -255,7 +258,11 @@ public static class NativeFilePicker
 			AJC.CallStatic( "PickFiles", Context, new FPResultCallbackAndroid( callback, null, null ), false, SelectedFilePath, allowedFileTypes, "" );
 #elif UNITY_IOS
 			FPResultCallbackiOS.Initialize( callback, null, null );
-			_NativeFilePicker_PickFile( allowedFileTypes, allowedFileTypes.Length );
+			// Use PHPicker for video types so iOS opens Photo Library instead of Files app
+			if( allowedFileTypes.Length > 0 && System.Array.Exists( allowedFileTypes, t => t == "video/*" || t == "public.movie" ) )
+				_NativeFilePicker_PickVideoFromLibrary();
+			else
+				_NativeFilePicker_PickFile( allowedFileTypes, allowedFileTypes.Length );
 #else
 			if( callback != null )
 				callback( null );
